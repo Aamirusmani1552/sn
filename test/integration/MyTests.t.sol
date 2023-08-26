@@ -283,61 +283,78 @@ contract MyTests is HelperContract {
         // no need for test - will delete after submission. just to remember
     }
 
-    function testCheck() public {
-        address token = address(jpycv2);
-
-        // owner set's contest
+    function testShouldRevertWhenFundsAreZero() public {
         bytes32 contestId = bytes32(abi.encode("contestId", "test"));
         uint256 closeTime = block.timestamp + 1 days;
         proxyFactory2.setContest(organizer, contestId, closeTime, address(distributor2));
         bytes32 salt = keccak256(abi.encode(organizer, contestId, address(distributor2)));
 
         assertEq(closeTime, proxyFactory2.saltToCloseTime(salt));
+        console.log(proxyFactory2.saltToCloseTime(salt));
+        console.log(closeTime);
 
         // getting the address of the proxy
         address proxyAddress = proxyFactory2.getProxyAddress(salt, address(distributor2));
 
-        // organiser sets winners, percentages
-        uint8 winnersAndPercentageLength = 5;
-        uint16 maxPercentage = 9500;
+        // set tokens, winners, percentages
+        address token = address(jpycv2);
+        address[] memory winners = new address[](1);
+        winners[0] = user1;
+        uint256[] memory percentages = new uint256[](1);
+        percentages[0] = 9500;
 
-        address[] memory winners = new address[](winnersAndPercentageLength);
-        for (uint8 i; i < winnersAndPercentageLength; i++) {
-            winners[i] = makeAddr(string(abi.encodePacked("user", i)));
-        }
-
-        uint256[] memory percentages = new uint256[](winnersAndPercentageLength);
-
-        uint16 totalPercentage;
-        percentages[0] = 1000;
-        percentages[1] = 37;
-        percentages[2] = 63;
-        percentages[3] = 1000;
-        percentages[4] = 7400;
-
-        for (uint8 i; i < winnersAndPercentageLength; i++) {
-            totalPercentage += uint16(percentages[i]);
-        }
-
-        console.log(totalPercentage, maxPercentage);
-
-        // organiser sets data to distribute
+        // set data
         bytes memory data = abi.encodeWithSelector(Distributor.distribute.selector, token, winners, percentages, "");
 
-        // sponsors sending tokens to the proxy (considering one of it could be organiser as well)
-        vm.startPrank(sponsor);
-        MockERC20WithBlackList(token).transfer(proxyAddress, 10000 ether);
-        vm.stopPrank();
+        // sending tokens to proxy
+        // vm.startPrank(sponsor);
+        // MockERC20WithBlackList(token).transfer(proxyAddress, 10000 ether);
+        // vm.stopPrank();
 
+        // distribute
         vm.warp(closeTime + 1);
         vm.startPrank(organizer);
+        vm.expectRevert(ProxyFactory.ProxyFactory__DelegateCallFailed.selector);
         proxyFactory2.deployProxyAndDistribute(contestId, address(distributor2), data);
         vm.stopPrank();
+    }
 
-        // organiser has the winning balance
-        uint256 stadiumAddressBalance = MockERC20WithBlackList(token).balanceOf(stadiumAddress);
+    function testFundsCanBeTransferredToAddressZeroWinner() public {
+        bytes32 contestId = bytes32(abi.encode("contestId", "test"));
+        uint256 closeTime = block.timestamp + 1 days;
+        proxyFactory2.setContest(organizer, contestId, closeTime, address(distributor2));
+        bytes32 salt = keccak256(abi.encode(organizer, contestId, address(distributor2)));
 
-        assertEq(stadiumAddressBalance, 500 ether);
+        assertEq(closeTime, proxyFactory2.saltToCloseTime(salt));
+        console.log(proxyFactory2.saltToCloseTime(salt));
+        console.log(closeTime);
+
+        // getting the address of the proxy
+        address proxyAddress = proxyFactory2.getProxyAddress(salt, address(distributor2));
+
+        // set tokens, winners, percentages
+        address token = address(jpycv2);
+        address[] memory winners = new address[](2);
+        winners[0] = user1;
+        winners[1] = address(0);
+        uint256[] memory percentages = new uint256[](2);
+        percentages[0] = 5500;
+        percentages[1] = 4000;
+
+        // set data
+        bytes memory data = abi.encodeWithSelector(Distributor.distribute.selector, token, winners, percentages, "");
+
+        // sending tokens to proxy
+        // vm.startPrank(sponsor);
+        // MockERC20WithBlackList(token).transfer(proxyAddress, 10000 ether);
+        // vm.stopPrank();
+
+        // distribute
+        vm.warp(closeTime + 1);
+        vm.startPrank(organizer);
+        vm.expectRevert(ProxyFactory.ProxyFactory__DelegateCallFailed.selector);
+        proxyFactory2.deployProxyAndDistribute(contestId, address(distributor2), data);
+        vm.stopPrank();
     }
 }
 
